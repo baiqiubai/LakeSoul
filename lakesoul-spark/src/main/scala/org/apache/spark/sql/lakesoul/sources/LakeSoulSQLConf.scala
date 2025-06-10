@@ -196,6 +196,80 @@ object LakeSoulSQLConf {
       .intConf
       .createWithDefault(20)
 
+  val COMPACTION_LEVEL0_FILE_NUM_LIMIT: ConfigEntry[Int] =
+    buildConf("compaction.level0.file.number.limit")
+      .doc(
+        """
+          |COMPACTION LEVEL0 SINGLE TASK READ FILE NUMBER, DEFAULT IS 10.
+        """.stripMargin)
+      .intConf
+      .createWithDefault(10)
+
+  val COMPACTION_MAX_BYTES_FOR_LEVEL_BASE: ConfigEntry[String] =
+    buildConf("compaction.max.bytes.for.level.base")
+      .doc(
+        """
+          |COMPACTION MAX BYTES FOR LEVEL BASE LIMIT. Default is 1GB.
+        """.stripMargin)
+      .stringConf
+      .createWithDefault("1GB")
+
+  val COMPACTION_MAX_BYTES_FOR_LEVEL_MULTIPLIER: ConfigEntry[Int] =
+    buildConf("compaction.max.bytes.for.level.multiplier")
+      .doc(
+        """
+          |COMPACTION MAX BYTES FOR LEVEL MULTIPLIER. Default is 10.
+        """.stripMargin)
+      .intConf
+      .createWithDefault(10)
+
+  val MAX_NUM_LEVELS_LIMIT: ConfigEntry[Int] =
+    buildConf("max.num.levels.limit")
+      .doc(
+        """
+          | MAX NUM LEVELS LIMIT. Default is 3.
+        """.stripMargin)
+      .intConf
+      .createWithDefault(3)
+
+  val COMPACTION_GROUP_MIN_FILE_SIZE_FOR_LEVEL_BASE: ConfigEntry[String] =
+    buildConf("compaction.group.min.file.size.for.level.base")
+      .doc(
+        """
+          |COMPACTION GROUP MIN FILE SIZE FOR LEVEL BASE. Default is 50MB.
+        """.stripMargin)
+      .stringConf
+      .createWithDefault("50MB")
+
+  val COMPACTION_GROUP_MIN_FILE_SIZE_FOR_LEVEL_MULTIPLIER: ConfigEntry[Int] =
+    buildConf("compaction.group.min.file.size.for.level.multiplier")
+      .doc(
+        """
+          |COMPACTION MAX BYTES FOR LEVEL MULTIPLIER. Default is 10.
+        """.stripMargin)
+      .intConf
+      .createWithDefault(10)
+
+
+  val COMPACTION_MIN_FILE_NEED_MOVE_FOR_LEVEL_BASE: ConfigEntry[String] =
+    buildConf("compaction.min.file.size.need.move.for.level.base")
+      .doc(
+        """
+          |COMPACTION GROUP MIN FILE SIZE FOR LEVEL BASE. Default is 50MB.
+        """.stripMargin)
+      .stringConf
+      .createWithDefault("1GB")
+
+  val COMPACTION_MIN_FILE_NEED_MOVE_FOR_LEVEL_MULTIPLIER: ConfigEntry[Int] =
+    buildConf("compaction.min.file.size.need.move.for.level.multiplier")
+      .doc(
+        """
+          |COMPACTION MAX BYTES FOR LEVEL MULTIPLIER. Default is 10.
+        """.stripMargin)
+      .intConf
+      .createWithDefault(5)
+
+
   val COMPACTION_LEVEL1_FILE_MERGE_SIZE_LIMIT: ConfigEntry[String] =
     buildConf("compaction.level1.file.merge.size.limit")
       .doc(

@@ -642,6 +642,26 @@ class NewCompactionSuite extends QueryTest
     }
   }
 
+  test("level1 compaction trigger") {
+    val maxFileSize = "30KB"
+    val maxFileSizeValue = DBUtil.parseMemoryExpression(maxFileSize)
+    withSQLConf(LakeSoulSQLConf.COMPACTION_LEVEL1_FILE_NUM_LIMIT.key -> "5",
+      LakeSoulSQLConf.MAX_NUM_LEVELS_LIMIT.key -> "3",
+      LakeSoulSQLConf.COMPACTION_MAX_BYTES_FOR_LEVEL_BASE.key -> "1GB",
+      LakeSoulSQLConf.COMPACTION_MAX_BYTES_FOR_LEVEL_MULTIPLIER.key -> "10",
+      LakeSoulSQLConf.COMPACTION_GROUP_MIN_FILE_SIZE_FOR_LEVEL_BASE.key -> "50MB",
+      LakeSoulSQLConf.COMPACTION_GROUP_MIN_FILE_SIZE_FOR_LEVEL_MULTIPLIER.key -> "10",
+      LakeSoulSQLConf.COMPACTION_MIN_FILE_NEED_MOVE_FOR_LEVEL_BASE.key -> "512MB",
+      LakeSoulSQLConf.COMPACTION_MIN_FILE_NEED_MOVE_FOR_LEVEL_MULTIPLIER.key -> "5",
+      LakeSoulSQLConf.COMPACTION_LEVEL_MAX_FILE_SIZE.key -> maxFileSize) {
+      withTempDir { tempDir =>
+        val tablePath = tempDir.getCanonicalPath
+        val spark = SparkSession.active
+
+      }
+    }
+  }
+
   test("new compaction cdc table with limited file size") {
     val maxFileSize = "30KB"
     val maxFileSizeValue = DBUtil.parseMemoryExpression(maxFileSize)
