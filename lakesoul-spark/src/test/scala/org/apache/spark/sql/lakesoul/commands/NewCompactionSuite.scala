@@ -437,7 +437,7 @@ class NewCompactionSuite extends QueryTest
           }
 
           // Get initial PartitionInfo count
-          val initialFile = getFileList(tablePath)
+            val initialFile = getFileList(tablePath)
           val incrementalFileCount = initialFile.filter(file => !file.path.contains("compact_dir")).length
           val lastCompactedFileCount = initialFile.filter(file => file.path.contains("compact_dir")).length
           println(s"before ${c}th time compact file count=${incrementalFileCount + lastCompactedFileCount}, " +
