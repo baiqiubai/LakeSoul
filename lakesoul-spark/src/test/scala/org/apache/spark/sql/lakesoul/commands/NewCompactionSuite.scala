@@ -22,6 +22,7 @@ import org.apache.spark.sql.test.{SharedSparkSession, TestSparkSession}
 import org.junit.runner.RunWith
 import org.scalatest.BeforeAndAfterEach
 import org.scalatestplus.junit.JUnitRunner
+import scala.collection.mutable.HashMap
 
 @RunWith(classOf[JUnitRunner])
 class NewCompactionSuite extends QueryTest
@@ -641,6 +642,144 @@ class NewCompactionSuite extends QueryTest
       }
     }
   }
+
+  test("every level single file size limited") {
+    val maxFileSize = "30KB"
+    val maxFileSizeValue = DBUtil.parseMemoryExpression(maxFileSize)
+    withSQLConf(LakeSoulSQLConf.COMPACTION_LEVEL1_FILE_NUM_LIMIT.key -> "3",
+      LakeSoulSQLConf.MAX_NUM_LEVELS_LIMIT.key -> "4",
+      LakeSoulSQLConf.COMPACTION_MAX_BYTES_FOR_LEVEL_BASE.key -> "20KB",
+      LakeSoulSQLConf.COMPACTION_MAX_BYTES_FOR_LEVEL_MULTIPLIER.key -> "3",
+      LakeSoulSQLConf.COMPACTION_MIN_FILE_NEED_MOVE_FOR_LEVEL_BASE.key -> "10KB",
+      LakeSoulSQLConf.COMPACTION_MAX_BYTES_FOR_LEVEL_MULTIPLIER.key -> "3",
+      LakeSoulSQLConf.COMPACTION_LEVEL_MAX_FILE_SIZE.key -> maxFileSize) {
+      withTempDir { tempDir =>
+        val tablePath = tempDir.getCanonicalPath
+        val spark = SparkSession.active
+
+        val hashBucketNum = 1
+        val compactRounds = 30
+        val upsertPerRounds = 20
+        val startIdGap = 501
+        val rowsPerUpsert = 1000
+
+        // Create test data
+        val df = Seq(
+          (1, "2023-01-01", 10, 1),
+          (2, "2023-01-02", 20, 1),
+          (3, "2023-01-03", 30, 1),
+          (4, "2023-01-04", 40, 1),
+          (5, "2023-01-05", 50, 1)
+        ).toDF("id", "date", "value", "range")
+
+        // Write initial data
+        df.write
+          .format("lakesoul")
+          .option("rangePartitions", "range")
+          .option("hashPartitions", "id")
+          .option(SHORT_TABLE_NAME, "new_compaction_size_limit_table")
+          .option("hashBucketNum", hashBucketNum.toString)
+          .save(tablePath)
+
+        val lakeSoulTable = LakeSoulTable.forPath(tablePath)
+
+        for (c <- 0 until compactRounds) {
+          // Simulate multiple append operations
+          for (i <- c * upsertPerRounds + 1 to (c + 1) * upsertPerRounds) {
+            val startId = i * startIdGap
+            val appendDf = createTestDataFrame(startId, i, rowsPerUpsert, false)
+            lakeSoulTable.upsert(appendDf)
+          }
+
+          spark.time({
+            lakeSoulTable.newCompaction()
+          })
+
+          // Get PartitionInfo count after compaction
+          val compactedFiles = getFileList(tablePath)
+
+          compactedFiles.groupBy(_.file_bucket_id).foreach { case (bucketId, dataFileInfoList) =>
+            dataFileInfoList.foreach( dataFileInfo => {
+              if(dataFileInfo.path.contains("compact_dir")) {
+                val index = dataFileInfo.path.indexOf("compact_dir")
+                val end = index + 12;
+                val level = dataFileInfo.path.substring(index + 11, end ).toInt
+                if(level >= 1) {
+                  if(level >= 2) {
+                    assert(dataFileInfo.size >=
+                      DBUtil.parseMemoryExpression(spark.conf.get("spark.dmetasoul.lakesoul.compaction.min.file.size.need.move.for.level.base"))
+                        * Math.pow(spark.conf.get("spark.dmetasoul.lakesoul.compaction.min.file.size.need.move.for.level.multiplier").toInt, level - 2))
+                  }
+                  assert(dataFileInfo.size < DBUtil.parseMemoryExpression(spark.conf.get("spark.dmetasoul.lakesoul.compaction.min.file.size.need.move.for.level.base"))
+                    * Math.pow(spark.conf.get("spark.dmetasoul.lakesoul.compaction.min.file.size.need.move.for.level.multiplier").toInt, level ))
+                }
+              }
+            })
+          }
+        }
+      }
+    }
+  }
+
+
+  test("after compact every level file size limited") {
+    val maxFileSize = "30KB"
+    val maxFileSizeValue = DBUtil.parseMemoryExpression(maxFileSize)
+    withSQLConf(LakeSoulSQLConf.COMPACTION_LEVEL1_FILE_NUM_LIMIT.key -> "3",
+      LakeSoulSQLConf.MAX_NUM_LEVELS_LIMIT.key -> "3",
+      LakeSoulSQLConf.COMPACTION_MAX_BYTES_FOR_LEVEL_BASE.key -> "20KB",
+      LakeSoulSQLConf.COMPACTION_MAX_BYTES_FOR_LEVEL_MULTIPLIER.key -> "5",
+      LakeSoulSQLConf.COMPACTION_LEVEL1_FILE_MERGE_NUM_LIMIT.key -> "2",
+      LakeSoulSQLConf.COMPACTION_GROUP_MIN_FILE_SIZE_FOR_LEVEL_BASE.key -> "15KB",
+      LakeSoulSQLConf.COMPACTION_GROUP_MIN_FILE_SIZE_FOR_LEVEL_MULTIPLIER.key -> "3") {
+      withTempDir { tempDir =>
+        val tablePath = tempDir.getCanonicalPath
+        val spark = SparkSession.active
+        spark.sparkContext.setLogLevel("ERROR")
+
+        val hashBucketNum = 1
+        val compactRounds = 10
+        val upsertPerRounds = 100
+        val startIdGap = 501
+        val rowsPerUpsert = 1000
+
+        // Create test data
+        val df = Seq(
+          (1, "2023-01-01", 10, 1),
+          (2, "2023-01-02", 20, 1),
+          (3, "2023-01-03", 30, 1),
+          (4, "2023-01-04", 40, 1),
+          (5, "2023-01-05", 50, 1)
+        ).toDF("id", "date", "value", "range")
+
+        // Write initial data
+        df.write
+          .format("lakesoul")
+          .option("rangePartitions", "range")
+          .option("hashPartitions", "id")
+          .option(SHORT_TABLE_NAME, "new_compaction_size_limit_table")
+          .option("hashBucketNum", hashBucketNum.toString)
+          .save(tablePath)
+
+        val lakeSoulTable = LakeSoulTable.forPath(tablePath)
+
+        for (c <- 0 until compactRounds) {
+          // Simulate multiple append operations
+          for (i <- c * upsertPerRounds + 1 to (c + 1) * upsertPerRounds) {
+            val startId = i * startIdGap
+            val appendDf = createTestDataFrame(startId, i, rowsPerUpsert, false)
+            lakeSoulTable.upsert(appendDf)
+          }
+
+          spark.time({
+            lakeSoulTable.newCompaction()
+          })
+
+          }
+        }
+      }
+    }
+
 
   test("level1 compaction trigger") {
     val maxFileSize = "30KB"
