@@ -31,8 +31,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+
 public abstract class LakeSoulSource<OUT>
     implements Source<OUT, LakeSoulPartitionSplit, LakeSoulPendingSplits> {
+  private static final Logger LOG = LoggerFactory.getLogger(LakeSoulSource.class);  
   private static final long serialVersionUID = 7549443472589852334L;
   final TableId tableId;
 
@@ -104,6 +109,7 @@ public abstract class LakeSoulSource<OUT>
             optionParams.getOrDefault(LakeSoulOptions.TIME_ZONE(), ""));
     String readType = optionParams.getOrDefault(LakeSoulOptions.READ_TYPE(), "");
     if (getBoundedness().equals(Boundedness.CONTINUOUS_UNBOUNDED)) {
+      LOG.info("-------------- LakeSoulSource createEnumerator ----------------");  
       return new LakeSoulAllPartitionDynamicSplitEnumerator(
           enumContext,
           new LakeSoulDynSplitAssigner(
@@ -114,7 +120,9 @@ public abstract class LakeSoulSource<OUT>
           tableInfo.getTableId(),
           optionParams.getOrDefault(LakeSoulOptions.HASH_BUCKET_NUM(), "-1"),
           partitionColumns,
-          partitionFilters);
+          partitionFilters,
+          false,
+          0);
 
     } else {
       return staticSplitEnumerator(
@@ -208,6 +216,7 @@ public abstract class LakeSoulSource<OUT>
   public SplitEnumerator<LakeSoulPartitionSplit, LakeSoulPendingSplits> restoreEnumerator(
       SplitEnumeratorContext<LakeSoulPartitionSplit> enumContext, LakeSoulPendingSplits checkpoint)
       throws Exception {
+    LOG.info("---------------- LakeSoulSource restoreEnumerator -----------------");  
     return new LakeSoulAllPartitionDynamicSplitEnumerator(
         enumContext,
         new LakeSoulDynSplitAssigner(
@@ -218,7 +227,9 @@ public abstract class LakeSoulSource<OUT>
         checkpoint.getTableId(),
         String.valueOf(checkpoint.getHashBucketNum()),
         this.partitionColumns,
-        this.partitionFilters);
+        this.partitionFilters,
+        checkpoint.getPerformedInitialSnapshot(),
+        checkpoint.getLastReadMsgId());
   }
 
   @Override

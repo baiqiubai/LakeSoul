@@ -23,14 +23,18 @@ public class LakeSoulPendingSplits {
     private final String parDesc;
     private final long discoverInterval;
     private final int hashBucketNum;
+    private final boolean hasPerformedInitialSnapshot;
+    private final long lastReadMsgId;
 
-    public LakeSoulPendingSplits(List<LakeSoulPartitionSplit> splits, long lastReadTimestamp, String tableId, String parDesc, long discoverInterval, int hashBucketNum) {
+    public LakeSoulPendingSplits(List<LakeSoulPartitionSplit> splits, long lastReadTimestamp, String tableId, String parDesc, long discoverInterval, int hashBucketNum, boolean hasPerformedInitialSnapshot, long lastReadMsgId) {
         this.splits = splits;
         this.lastReadTimestamp = lastReadTimestamp;
         this.tableId = tableId;
         this.parDesc = parDesc;
         this.discoverInterval = discoverInterval;
         this.hashBucketNum = hashBucketNum;
+        this.hasPerformedInitialSnapshot = hasPerformedInitialSnapshot;
+        this.lastReadMsgId = lastReadMsgId;
     }
 
     public List<LakeSoulPartitionSplit> getSplits() {
@@ -55,6 +59,14 @@ public class LakeSoulPendingSplits {
 
     public int getHashBucketNum() {
         return hashBucketNum;
+    }
+
+    public boolean getPerformedInitialSnapshot() {
+        return hasPerformedInitialSnapshot;
+    }
+
+    public long getLastReadMsgId() {
+        return lastReadMsgId;
     }
 
     @Override

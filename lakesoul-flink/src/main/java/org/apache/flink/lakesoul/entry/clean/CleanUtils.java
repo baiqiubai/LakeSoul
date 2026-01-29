@@ -16,10 +16,25 @@ import java.sql.*;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.security.MessageDigest;
 
 public class CleanUtils {
 
     private static final Logger logger = LoggerFactory.getLogger(CleanUtils.class);
+
+    private String md5(String input) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] hashInBytes = md.digest(input.getBytes("UTF-8"));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hashInBytes) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     public void deleteDataCommitInfo(String table_id, String commit_id, String partition_desc) throws SQLException {
         Connection connection = DriverManager.getConnection("jdbc:postgresql://localhost:5432/lakesoul_test", "lakesoul_test", "lakesoul_test");
@@ -312,6 +327,34 @@ public class CleanUtils {
         return tableList;
 
     }
+
+     public void cleanPGMQ(String tableId, long deadTimestamp, Connection conn) {
+        if (deadTimestamp <= 0) return;
+        
+        String queueName = "ls_" + md5(tableId);
+        String targetTable = "pgmq.q_" + queueName;
+        java.sql.Timestamp deadTime = new java.sql.Timestamp(deadTimestamp);
+
+        try (java.sql.Statement checkStmt = conn.createStatement()) {
+            // 检查表是否存在
+            try (java.sql.ResultSet rs = checkStmt.executeQuery("SELECT to_regclass('" + targetTable + "')")) {
+                if (rs.next() && rs.getString(1) != null) {
+                    String deleteSql = "DELETE FROM " + targetTable + " WHERE enqueued_at < ?";
+                    try (java.sql.PreparedStatement ps = conn.prepareStatement(deleteSql)) {
+                        ps.setTimestamp(1, deadTime);
+                        int count = ps.executeUpdate();
+                        if (count > 0) {
+                            logger.info("PGMQ Clean: Table {} Queue {} deleted {} messages older than {}", 
+                                     tableId, queueName, count, deadTime);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Failed to clean PGMQ for table " + tableId, e);
+        }
+    }
+
 
 }
 

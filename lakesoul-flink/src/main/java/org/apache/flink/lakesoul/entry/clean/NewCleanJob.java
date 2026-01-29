@@ -198,6 +198,7 @@ public class NewCleanJob {
                         log.info("1:当前压缩版本是旧版本：" + compactVersion);
                         cleanUtils.deleteFileAndDataCommitInfo(snapshot, tableId, partitionDesc, pgConnection, compactVersion);
                         cleanUtils.cleanPartitionInfo(tableId, partitionDesc, version, pgConnection);
+                        tryCleanPGMQ(tableId, compactTime - expiredTime);
                     } else {
                         willState.put(tableId + "/" + partitionDesc + "/" + version, willStateValue);
                     }
@@ -217,6 +218,7 @@ public class NewCleanJob {
                                 log.info("2:当前压缩版本是旧版本：" + compactVersion);
                                 cleanUtils.deleteFileAndDataCommitInfo(snapshot, tableId, partitionDesc, pgConnection, compactVersion);
                                 cleanUtils.cleanPartitionInfo(tableId, partitionDesc, version, pgConnection);
+                                tryCleanPGMQ(tableId, compactTime - expiredTime);
                             } else {
                                 willState.put(tableId + "/" + partitionDesc + "/" + version, willStateValue);
                             }
@@ -233,6 +235,7 @@ public class NewCleanJob {
                             log.info("3 当前压缩版本是旧版本： " + compactVersion);
                             cleanUtils.deleteFileAndDataCommitInfo(snapshot, tableId, partitionDesc, pgConnection, compactVersion);
                             cleanUtils.cleanPartitionInfo(tableId, partitionDesc, version, pgConnection);
+                            tryCleanPGMQ(tableId, compactTime - expiredTime);
                         } else {
                             willState.put(tableId + "/" + partitionDesc + "/" + version, willStateValue);
                         }
@@ -266,6 +269,7 @@ public class NewCleanJob {
                                 log.info("4 当前压缩版本为旧版本：" + compactionVersionState.value());
                                 cleanUtils.deleteFileAndDataCommitInfo(snapshot, tableId, partitionDesc, pgConnection, compactionVersionState.value());
                                 cleanUtils.cleanPartitionInfo(tableId, partitionDesc, version, pgConnection);
+                                tryCleanPGMQ(tableId, expiredThreshold);
                                 willStateIterator.remove();
                             }
                         }
@@ -288,6 +292,10 @@ public class NewCleanJob {
                 pgConnection.close();
                 System.out.println("✅ PostgreSQL connection returned to pool.");
             }
+        }
+
+        private void tryCleanPGMQ(String tableId, long expiredThreshold) {
+            cleanUtils.cleanPGMQ(tableId, expiredThreshold, pgConnection);
         }
     }
 }
