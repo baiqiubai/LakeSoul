@@ -254,6 +254,8 @@ public class LakeSoulAllPartitionDynamicSplitEnumerator
 
         long currentOffset = this.lastReadMsgId;
 
+	LOG.info("PGMQ QueueName {} readMessageFromId currentOffset {})", queueName, currentOffset);
+	
         List<PgmqMessage> messages = pgmqDao.readMessagesFromId(queueName, currentOffset, 500);
 
         if (messages.isEmpty()) {

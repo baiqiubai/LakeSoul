@@ -115,7 +115,7 @@ public abstract class LakeSoulSource<OUT>
           new LakeSoulDynSplitAssigner(
               optionParams.getOrDefault(LakeSoulOptions.HASH_BUCKET_NUM(), "-1")),
           this.tableRowType,
-          Long.parseLong(optionParams.getOrDefault(LakeSoulOptions.DISCOVERY_INTERVAL(), "30000")),
+          Long.parseLong(optionParams.getOrDefault(LakeSoulOptions.DISCOVERY_INTERVAL(), "3000")),
           convertTimeFormatWithTimeZone(readStartTimestampWithTimeZone),
           tableInfo.getTableId(),
           optionParams.getOrDefault(LakeSoulOptions.HASH_BUCKET_NUM(), "-1"),

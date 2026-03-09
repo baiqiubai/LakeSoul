@@ -50,6 +50,7 @@ public class  LakeSoulSinkOptions {
     public static final String LAKESOUL_VIEW_KIND = "flink";
     public static final String VIEW_ORIGINAL_QUERY = "original_query";
     public static final String VIEW_EXPANDED_QUERY = "expand_query";
+    public static final String LAKESOUL_COMMIT_THREAD_NUM = "LAKESOUL_COMMIT_THREAD_NUM";
 
     public static final ConfigOption<String> CATALOG_PATH = ConfigOptions
             .key("path")
@@ -243,6 +244,12 @@ public class  LakeSoulSinkOptions {
             .longType()
             .defaultValue(Long.MAX_VALUE)
             .withDescription("limit io read num");
+
+    public static final ConfigOption<String> PARTITION_FORMAT_RULE = ConfigOptions
+            .key("format.rule")
+            .stringType()
+            .defaultValue("dd/MM/yyyy")
+            .withDescription("when timestamp col as partition col, the col can be formated");
 }
 
 
