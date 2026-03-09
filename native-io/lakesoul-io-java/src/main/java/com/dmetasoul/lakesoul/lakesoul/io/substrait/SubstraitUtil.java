@@ -441,6 +441,7 @@ public class SubstraitUtil {
     }
 
     public static Expression.Literal anyToSubstraitLiteral(Type type, Object any) throws IOException {
+        System.out.println("anyToSubstraitLiteral type " + type + ", any " + any);
         if (type instanceof Type.Date) {
             if (any instanceof Integer) {
                return ExpressionCreator.date(false, (Integer) any);

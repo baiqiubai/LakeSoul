@@ -29,20 +29,23 @@ import io.substrait.expression.Expression;
 import io.substrait.type.TypeCreator;
 import io.substrait.extension.DefaultExtensionCatalog;
 import org.apache.arrow.vector.types.pojo.Schema;
+import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.stream.Collectors;
+import java.time.LocalDate;
 
 import static com.dmetasoul.lakesoul.lakesoul.io.substrait.SubstraitUtil.applyPartitionFilters;
 import static com.dmetasoul.lakesoul.lakesoul.io.substrait.SubstraitUtil.and;
 import static com.dmetasoul.lakesoul.lakesoul.io.substrait.SubstraitUtil.substraitExprToProto;
 import static com.dmetasoul.lakesoul.lakesoul.io.substrait.SubstraitUtil.arrowFieldToSubstraitField;
 import static com.dmetasoul.lakesoul.meta.DBConfig.LAKESOUL_NON_PARTITION_TABLE_PART_DESC;
-
+import static com.dmetasoul.lakesoul.meta.DBConfig.LAKESOUL_RANGE_PARTITION_SPLITTER;
 
 public class LakeSoulSplitManager implements ConnectorSplitManager {
     private static final Logger log = Logger.get(LakeSoulSplitManager.class);
@@ -132,6 +135,43 @@ public class LakeSoulSplitManager implements ConnectorSplitManager {
         );
     }
 
+    private Map<String, String> extractEqualityFilters(List<FilterPredicate> parFilters, Schema partitionSchema) {
+    if (parFilters == null) {
+        return null;
+    }
+    
+    Map<String, String> equalityKeys = new HashMap<>();
+    
+    for (FilterPredicate fp : parFilters) {
+        if (fp instanceof Operators.Eq) {
+            Operators.Eq eq = (Operators.Eq) fp;
+            String colName = eq.getColumn().getColumnPath().toDotString();
+            Object value = eq.getValue();
+            Field arrowField = partitionSchema.findField(colName);
+            if (arrowField == null) {
+                return null;
+            }
+
+            String strValue;
+            
+            if (value instanceof Integer && arrowField.getType() instanceof ArrowType.Date) {
+                strValue = LocalDate.ofEpochDay((Integer) value).toString();
+            } 
+            else if (value instanceof org.apache.parquet.io.api.Binary) {
+                strValue = ((org.apache.parquet.io.api.Binary) value).toStringUsingUTF8();
+            } 
+            else {
+                strValue = String.valueOf(value);
+            }
+            
+            equalityKeys.put(colName, strValue);
+            
+        } else {
+            return null; 
+        }
+    }
+    return equalityKeys;
+}
 
 
     @Override
@@ -151,15 +191,30 @@ public class LakeSoulSplitManager implements ConnectorSplitManager {
             List<Field> partitionFields = partitionColumns.stream().map(arrowSchema::findField).collect(Collectors.toList());
             Schema partitionSchema = new Schema(partitionFields);
             List<PartitionInfo> allPartitionInfo;
-
-            if (partitionColumns.isEmpty()) {
-                allPartitionInfo = DataOperation.dbManager().getPartitionInfos(tid, Collections.singletonList(LAKESOUL_NON_PARTITION_TABLE_PART_DESC));
-            } else {
+            List<FilterPredicate> parFilters = tableLayout.getParFilters();
+            Map<String, String> eqFilters = extractEqualityFilters(parFilters, partitionSchema);
+            log.info("DEBUG: parFilters = " + parFilters + ", partitionColumns = " + partitionColumns);
+            log.info("DEBUG: eqFilters = " + eqFilters  );
+            if (eqFilters != null && !eqFilters.isEmpty()) {
+                boolean containsAllKeys = partitionColumns.stream().allMatch(eqFilters::containsKey);
+                if (containsAllKeys && eqFilters.size() == partitionColumns.size()) {
+                    String partitionDesc = partitionColumns.stream()
+                    .map(col -> col + "=" + eqFilters.get(col))
+                    .collect(Collectors.joining(LAKESOUL_RANGE_PARTITION_SPLITTER)); 
+                    allPartitionInfo = DataOperation.dbManager().getOnePartition(tid, partitionDesc);
+                    log.info("Optimized Path 1: Point lookup for " + partitionDesc);
+                }else {
+                    String partitionQuery = eqFilters.entrySet().stream()
+                    .map(e -> e.getKey() + "=" + e.getValue())
+                    .collect(Collectors.joining(" & "));
+                    allPartitionInfo = DataOperation.dbManager().getPartitionInfosByPartialFilter(tid, partitionQuery);
+                    log.info("Optimized Path 2: Partial filter for " + partitionQuery);
+                }
+            }else {
+                log.info("Path 3: Full fetch and memory filter");
                 allPartitionInfo = MetaVersion.getAllPartitionInfo(tid);
             }
             
-            List<FilterPredicate> parFilters = tableLayout.getParFilters();
-            log.info("DEBUG: parFilters = " + parFilters);
             io.substrait.proto.Plan partitionFilterPlan = buildSubstraitPlan(parFilters, partitionSchema, tableName);
             log.info("DEBUG: partiitonFilterPlan " + partitionFilterPlan );
             List<PartitionInfo> filteredPartitionInfo = SubstraitUtil.applyPartitionFilters(allPartitionInfo, partitionSchema, partitionFilterPlan);   
