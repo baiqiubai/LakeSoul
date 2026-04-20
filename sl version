@@ -1,0 +1,119 @@
+[1mdiff --git a/lakesoul-presto/src/main/java/com/facebook/presto/lakesoul/LakeSoulConnector.java b/lakesoul-presto/src/main/java/com/facebook/presto/lakesoul/LakeSoulConnector.java[m
+[1mindex 3afd5bf9..618b6ae1 100644[m
+[1m--- a/lakesoul-presto/src/main/java/com/facebook/presto/lakesoul/LakeSoulConnector.java[m
+[1m+++ b/lakesoul-presto/src/main/java/com/facebook/presto/lakesoul/LakeSoulConnector.java[m
+[36m@@ -28,6 +28,7 @@[m [mpublic class LakeSoulConnector implements Connector {[m
+             LakeSoulSplitManager splitManager,[m
+             LakeSoulRecordSetProvider recordSetProvider[m
+     ){[m
+[32m+[m[32m        System.out.println("DEBUG: LakeSoulConnector 初始化");[m
+         this.metadata = requireNonNull(metadata, "metadata should not be null");[m
+         this.splitManager = requireNonNull(splitManager, "splitManager should not be null");[m
+         this.recordSetProvider = requireNonNull(recordSetProvider, "recordSetProvider should not be null");[m
+[36m@@ -50,11 +51,13 @@[m [mpublic class LakeSoulConnector implements Connector {[m
+ [m
+     @Override[m
+     public ConnectorRecordSetProvider getRecordSetProvider() {[m
+[32m+[m[32m        System.out.println("Connector getRecordSetProvider");[m
+         return recordSetProvider;[m
+     }[m
+ [m
+     @Override[m
+     public ConnectorPageSourceProvider getPageSourceProvider() {[m
+[32m+[m[32m        System.out.println("Connector getPageSourceProvider");[m
+         return new LakeSoulPagesSourceProvider(metadata.getTypeManager());[m
+     }[m
+ [m
+[1mdiff --git a/lakesoul-presto/src/main/java/com/facebook/presto/lakesoul/LakeSoulPageSource.java b/lakesoul-presto/src/main/java/com/facebook/presto/lakesoul/LakeSoulPageSource.java[m
+[1mindex c97e6776..acf73f50 100644[m
+[1m--- a/lakesoul-presto/src/main/java/com/facebook/presto/lakesoul/LakeSoulPageSource.java[m
+[1m+++ b/lakesoul-presto/src/main/java/com/facebook/presto/lakesoul/LakeSoulPageSource.java[m
+[36m@@ -24,9 +24,11 @@[m [mimport org.apache.arrow.vector.types.pojo.ArrowType;[m
+ import org.apache.arrow.vector.types.pojo.Field;[m
+ import org.apache.arrow.vector.types.pojo.Schema;[m
+ import org.apache.parquet.filter2.predicate.FilterApi;[m
+[32m+[m[32mimport org.apache.parquet.filter2.predicate.FilterPredicate;[m
+ import org.apache.parquet.io.api.Binary;[m
+ [m
+ import java.io.IOException;[m
+[32m+[m[32mimport java.nio.file.DirectoryStream.Filter;[m
+ import java.util.*;[m
+ import java.util.concurrent.CompletableFuture;[m
+ import java.util.stream.Collectors;[m
+[36m@@ -92,8 +94,13 @@[m [mpublic class LakeSoulPageSource implements ConnectorPageSource {[m
+         for (Map.Entry<String, String> partition : this.partitions.entrySet()) {[m
+             reader.setDefaultColumnValue(partition.getKey(), partition.getValue());[m
+         }[m
+[32m+[m[32m        for(FilterPredicate filter : split.getLayout().getFilters() ) {[m
+[32m+[m[32m            log.info(("LakeSoulPageSource filter " + filter.toString()));[m
+[32m+[m[32m            System.out.println("LakeSoulPageSource filter " + filter.toString());[m
+[32m+[m[32m            reader.addFilter(filter.toString());[m
+[32m+[m[32m        }[m[41m   [m
+         // set filters[m
+[31m-        split.getLayout().getFilters().forEach((filter) -> reader.addFilter(filter.toString()));[m
+[32m+[m[32m        //split.getLayout().getFilters().forEach((filter) -> reader.addFilter(filter.toString()));[m
+         // set s3 options[m
+         reader.setObjectStoreOptions([m
+                 LakeSoulConfig.getInstance().getAccessKey(),[m
+[1mdiff --git a/lakesoul-presto/src/main/java/com/facebook/presto/lakesoul/LakeSoulPagesSourceProvider.java b/lakesoul-presto/src/main/java/com/facebook/presto/lakesoul/LakeSoulPagesSourceProvider.java[m
+[1mindex f8c2f026..dd2e2904 100644[m
+[1m--- a/lakesoul-presto/src/main/java/com/facebook/presto/lakesoul/LakeSoulPagesSourceProvider.java[m
+[1m+++ b/lakesoul-presto/src/main/java/com/facebook/presto/lakesoul/LakeSoulPagesSourceProvider.java[m
+[36m@@ -35,6 +35,7 @@[m [mpublic class LakeSoulPagesSourceProvider implements ConnectorPageSourceProvider[m
+         LakeSoulSplit lakeSoulSplit = (LakeSoulSplit) split;[m
+         ArrowBlockBuilder builder = new ArrowBlockBuilder(typeManager);[m
+         try {[m
+[32m+[m[32m            System.out.println("createPageSource LakeSoulPageSource ");[m
+             return new LakeSoulPageSource(lakeSoulSplit, builder, columnHandles.build());[m
+         } catch (IOException e) {[m
+             throw new RuntimeException(e);[m
+[1mdiff --git a/lakesoul-presto/src/main/java/com/facebook/presto/lakesoul/LakeSoulRecordCursor.java b/lakesoul-presto/src/main/java/com/facebook/presto/lakesoul/LakeSoulRecordCursor.java[m
+[1mindex bcc52dc4..2ac271e7 100644[m
+[1m--- a/lakesoul-presto/src/main/java/com/facebook/presto/lakesoul/LakeSoulRecordCursor.java[m
+[1m+++ b/lakesoul-presto/src/main/java/com/facebook/presto/lakesoul/LakeSoulRecordCursor.java[m
+[36m@@ -22,6 +22,7 @@[m [mimport org.apache.arrow.vector.types.pojo.ArrowType;[m
+ import org.apache.arrow.vector.types.pojo.Field;[m
+ import org.apache.arrow.vector.types.pojo.Schema;[m
+ import org.apache.arrow.vector.util.Text;[m
+[32m+[m[32mimport org.apache.parquet.filter2.predicate.FilterPredicate;[m
+ [m
+ import java.io.IOException;[m
+ import java.math.BigDecimal;[m
+[36m@@ -89,8 +90,12 @@[m [mpublic class LakeSoulRecordCursor implements RecordCursor {[m
+                         .stream()[m
+                         .map(item -> ((LakeSoulTableColumnHandle) item).getColumnType())[m
+                         .collect(Collectors.toList());[m
+[32m+[m[32m        for(FilterPredicate filter : this.recordSet.getSplit().getLayout().getFilters() ) {[m
+[32m+[m[32m            System.out.println("LakeSoulPageSource filter " + filter.toString());[m
+[32m+[m[32m            reader.addFilter(filter.toString());[m
+[32m+[m[32m        }[m
+         // set filters[m
+[31m-        this.recordSet.getSplit().getLayout().getFilters().forEach((filter) -> reader.addFilter(filter.toString()));[m
+[32m+[m[32m        //this.recordSet.getSplit().getLayout().getFilters().forEach((filter) -> reader.addFilter(filter.toString()));[m
+         // set s3 options[m
+         reader.setObjectStoreOptions([m
+                 LakeSoulConfig.getInstance().getAccessKey(),[m
+[1mdiff --git a/lakesoul-presto/src/main/java/com/facebook/presto/lakesoul/LakeSoulRecordSetProvider.java b/lakesoul-presto/src/main/java/com/facebook/presto/lakesoul/LakeSoulRecordSetProvider.java[m
+[1mindex 436db863..624017ae 100644[m
+[1m--- a/lakesoul-presto/src/main/java/com/facebook/presto/lakesoul/LakeSoulRecordSetProvider.java[m
+[1m+++ b/lakesoul-presto/src/main/java/com/facebook/presto/lakesoul/LakeSoulRecordSetProvider.java[m
+[36m@@ -17,6 +17,7 @@[m [mpublic class LakeSoulRecordSetProvider implements ConnectorRecordSetProvider {[m
+     @Override[m
+     public RecordSet getRecordSet(ConnectorTransactionHandle transactionHandle, ConnectorSession session,[m
+                                   ConnectorSplit split, List<? extends ColumnHandle> columnHandles) {[m
+[32m+[m[32m        System.out.println("LakeSoulRecordSetProvider getRecordSet beging");[m
+         // Split to record set.[m
+         // Asuming that one split has only one recordset.[m
+         return new LakeSoulRecordSet((LakeSoulSplit) split, columnHandles);[m
+[1mdiff --git a/rust/lakesoul-io-c/src/lib.rs b/rust/lakesoul-io-c/src/lib.rs[m
+[1mindex 63c86a3a..936d3f32 100644[m
+[1m--- a/rust/lakesoul-io-c/src/lib.rs[m
+[1m+++ b/rust/lakesoul-io-c/src/lib.rs[m
+[36m@@ -218,6 +218,7 @@[m [mpub unsafe extern "C" fn lakesoul_config_builder_add_filter([m
+ ) -> NonNull<IOConfigBuilder> {[m
+     unsafe {[m
+         let filter = CStr::from_ptr(filter).to_str().unwrap().to_string();[m
+[32m+[m[32m        info!("lakesoul_config_builder_add_filter {}", filter);[m
+         convert_to_opaque([m
+             from_opaque::<IOConfigBuilder, LakeSoulIOConfigBuilder>(builder)[m
+                 .with_filter_str(filter),[m
